@@ -3,8 +3,6 @@
 
 Attributes
 ----------
-TEMP_FILE : str
-    Filename of temporary file used during sample loading.
 LOGGER : logging.Logger
     Module-level logger
 
@@ -19,9 +17,10 @@ from .config import (MAX_FMOD_TRACKS, PLAYBACK_FRAME_RATE, PLAYBACK_SPEED,
                      SHOW_FMOD_EXECUTION, SHOW_PROCESSOR_EXECUTION,
                      TICKS_PER_SECOND, CULL_FRAME_DELAY)
 from .exceptions import BlankSong, InvalidROM, InvalidSongNumber
-from .fmod import (FSampleMode, FSoundMode, fmod_init, get_error, load_sample,
-                   play_sound, set_loop_points, set_master_volume, set_output,
-                   set_paused, stop_sound, fmod_close)
+from pyfmodex.enums import SOUND_FORMAT, SOUND_TYPE, TIMEUNIT
+from pyfmodex.flags import MODE
+from pyfmodex.system import System
+from pyfmodex.structures import CREATESOUNDEXINFO
 from .inst_set import KeyArg
 from .interface import Display
 from .m4a import (FMODNote, M4ADirectSound, M4ADirectSoundSample, M4ADrum,
@@ -29,7 +28,6 @@ from .m4a import (FMODNote, M4ADirectSound, M4ADirectSoundSample, M4ADrum,
                   M4ASquare2, M4ATrack, M4AWaveform, resample)
 from .parser import Parser
 
-TEMP_FILE = 'temp'
 LOGGER = getLogger(__name__)
 LOGGER.setLevel(DEBUG)
 
@@ -43,9 +41,6 @@ class Player(object):
         Class-level logger exclusively for the M4A engine.
     Player.FMOD_LOGGER : Logger
         Class-level logger exclusively for the FMOD library.
-    _global_vol : int
-        Controls global volume of FMOD player; determined at run-time
-        by the `SoundDriverMode` construct.
     samples : Dict[Union[int, str], M4ASample]
         Dictionary of sample constructs from `M4ASong`.
     voices : Dict[int, M4AVoice]
@@ -68,41 +63,19 @@ class Player(object):
         FMOD_LOGGER.setLevel(WARNING)
 
     def __init__(self):
-        self._global_vol = 0
         self.song = M4ASong()
         self.samples = self.song.samples
         self.voices = self.song.voices
         self.tracks = self.song.tracks
         self.sdm = self.song.sdm
         self.frame_ctr = 0
-
-    @property
-    def global_vol(self):
-        """Controls FMOD global volume.
-
-        Returns
-        -------
-        int
-            FMOD global volume.
-        """
-        return self._global_vol
-
-    @global_vol.setter
-    def global_vol(self, volume):
-        """Set FMOD master volume."""
-        self._global_vol = volume
-        set_master_volume(self._global_vol)
-
-    def debug_fmod(self, action: str):
-        """Log FMOD information."""
-        self.FMOD_LOGGER.log(DEBUG, f' Error: {get_error():2} | {action:<16}')
+        self.system = System()
 
     def debug_m4a(self, action: str, track_id: int):
         """Log M4A processor information."""
         self.PROCESSOR_LOGGER.log(DEBUG, f' {action:^24} | Track: {track_id:2}')
 
-    @staticmethod
-    def load_sample(rom_path, sample):
+    def load_sample(self, sample):
         """Create sample handle in the FMOD player based on sample data.
 
         Parameters
@@ -118,43 +91,31 @@ class Player(object):
             FMOD sample handle.
 
         """
-        index = FSampleMode.FREE
-        mode = FSoundMode.PCM8 + FSoundMode.RAW + FSoundMode.MONO
+        mode = MODE.OPENMEMORY | MODE.OPENRAW | MODE.CREATESTREAM
         if sample.looped:
-            mode += FSoundMode.LOOP_NORMAL
-        if type(sample) == M4ADirectSoundSample:
-            mode += FSoundMode.SIGNED
+            mode |= MODE.LOOP_NORMAL
         else:
-            mode += FSoundMode.UNSIGNED
-        sample_handle = load_sample(index, rom_path, mode, 0, sample.size)
+            mode |= MODE.LOOP_OFF
+        if type(sample) != M4ADirectSoundSample:
+            sample.sample_data = bytes((byte + 128) % 256 for byte in sample.sample_data)
+        sound = self.system.create_sound(sample.sample_data, mode=mode, 
+                                         exinfo=CREATESOUNDEXINFO(length=sample.size,
+                                                                  sound_type=SOUND_TYPE.RAW.value,
+                                                                  format=SOUND_FORMAT.PCM8.value,
+                                                                  numchannels=1,
+                                                                  defaultfrequency=sample.frequency))
         if sample.looped:
-            set_loop_points(sample_handle, sample.loop_start,
-                            sample.size - 1)
-        return sample_handle
+            sound.set_loop_points(sample.loop_start, TIMEUNIT.PCMBYTES, sample.size - 1, TIMEUNIT.PCMBYTES)
+        return sound
 
     def load_samples(self):
         """Load requisite DirectSound samples."""
         for sample in self.samples.values():
-            with open(TEMP_FILE, 'wb') as f:
-                f.write(sample.sample_data)
-            sample.fmod_handle = self.load_sample(TEMP_FILE, sample)
-        try:
-            remove(TEMP_FILE)
-        except FileNotFoundError:
-            pass
+            sample.sound = self.load_sample(sample)
 
     def init_player(self):
         """Initialize FMOD player and load samples."""
-        set_output(1)
-        self.debug_fmod('Set Output: DIRECTSOUND')
-
-        fmod_init(self.sdm.frequency, MAX_FMOD_TRACKS, 0)
-        self.debug_fmod(
-            f'Init@{self.sdm.frequency} Hz, {MAX_FMOD_TRACKS} tracks')
-
-        set_master_volume(self.sdm.volume)
-        self.debug_fmod(f'Set Volume: {self.sdm.volume}')
-
+        self.system.init(maxchannels=MAX_FMOD_TRACKS)
         self.load_samples()
 
     def play_song(self, path, song_id, table_ptr):
@@ -206,8 +167,8 @@ class Player(object):
             for note in track.notes[::]:
                 if note.muted:
                     track.notes.remove(note)
-                    note.set_mute(False)
-                    stop_sound(note.fmod_handle)
+                    # note.set_mute(False)
+                    # note.channel.stop()
 
     def execute_tracks(self, ticks):
         """Process each track under a various tick rate.
@@ -233,12 +194,13 @@ class Player(object):
                 output_frequency = round(frequency * track.frequency)
                 output_panning = track.panning
                 note.frequency = frequency
-                sample = self.samples[sample_ptr].fmod_handle
-                note.fmod_handle = play_sound(FSampleMode.FREE, sample, True)
+                sample = self.samples[sample_ptr].sound
+                # note.channel = sample.play(paused=True)
+                note.channel = self.system.play_sound(sample, paused=True)
                 note.set_frequency(output_frequency)
                 note.set_panning(output_panning)
                 note.set_volume(0)
-                set_paused(note.fmod_handle, False)
+                note.channel.paused = False
 
                 track.lfo_pos = 0
                 track.notes.append(note)
@@ -262,6 +224,8 @@ class Player(object):
             self.execute_tracks(ticks)
             self.play_notes()
             for track in self.tracks:
+                # print(f"Track: program_ctr: {track.program_ctr}, Voice: {track.voice}, Note Queue: {track.note_queue}, Notes: {track.notes}")
+                # print(self.system.channels_playing)
                 track.update_envelope()
             if self.frame_ctr == 0:
                 self.cull_notes()
@@ -271,7 +235,9 @@ class Player(object):
             code = display.update()
             if code is False:
                 display.exit_scr()
-                fmod_close()
+                for sample in self.samples.values():
+                    sample.sound.release()
+                self.system.release()
                 break
             display.draw()
             display.wait(frame_delay - (perf_counter() - start_time))

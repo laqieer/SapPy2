@@ -110,3 +110,6 @@ tags
 .vscode
 icons/
 *.gba
+
+.DS_Store
+lib/

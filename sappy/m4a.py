@@ -10,7 +10,10 @@ from typing import Dict, List, NamedTuple, Union, Tuple, Deque
 from .config import (BASE_FREQUENCY, PSG_SQUARE_FREQUENCY, PSG_SQUARE_VOLUME,
                      PSG_WAVEFORM_FREQUENCY, PSG_WAVEFORM_SIZE, SEMITONE_RATIO)
 from .exceptions import InvalidArgument
-from .fmod import (get_mute, set_frequency, set_mute, set_panning, set_volume)
+from pyfmodex.channel import Channel
+from pyfmodex.sound import Sound
+from pyfmodex.enums import RESULT
+from pyfmodex.exceptions import FmodError
 from .inst_set import KeyArg, c_v, mxv
 
 NOTES = ('C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B')
@@ -41,7 +44,7 @@ class M4AVoice(object):
         self.root: KeyArg = root
         self.envelope: SoundEnvelope = SoundEnvelope(attack, decay, sustain,
                                                      release)
-        self.fmod_handle = None
+        self.sound: Sound = None
         self.mode = M4AVoiceMode(self.mode)
         self.root = KeyArg(self.root)
 
@@ -181,7 +184,7 @@ class M4ASample(object):
         self.loop_start = loop_start
         self.sample_data = sample_data
 
-        self.fmod_handle = None
+        self.sound: Sound = None
 
     def __repr__(self):
         return f'{self.__class__.__name__}(looped=0x{self.looped:X}, ' \
@@ -446,7 +449,7 @@ class FMODNote(object):
 
         self.frequency: int = 0
         self.envelope: SoundEnvelope = ...
-        self.fmod_handle: int = 0
+        self.channel: Channel = None
 
     def __repr__(self):
         return f'Note({self.midi_note}, {self.velocity}, {self.ticks}, ' \
@@ -464,7 +467,16 @@ class FMODNote(object):
     @property
     def muted(self) -> bool:
         """Return mute state in FMOD."""
-        return get_mute(self.fmod_handle)
+        muted=True
+        try:
+            muted=self.channel.mute
+        except FmodError as fmoderror:
+            if fmoderror.result not in (
+                    RESULT.INVALID_HANDLE,
+                    RESULT.CHANNEL_STOLEN,
+                ):
+                    raise fmoderror
+        return muted
 
     # endregion
 
@@ -493,16 +505,44 @@ class FMODNote(object):
     # region FMOD FUNCTIONS
 
     def set_panning(self, panning: int) -> None:
-        set_panning(self.fmod_handle, panning)
+        try:
+            self.channel.set_pan(panning)
+        except FmodError as fmoderror:
+            if fmoderror.result not in (
+                    RESULT.INVALID_HANDLE,
+                    RESULT.CHANNEL_STOLEN,
+                ):
+                    raise fmoderror
 
     def set_volume(self, volume: int) -> None:
-        set_volume(self.fmod_handle, volume)
+        try:
+            self.channel.volume = volume
+        except FmodError as fmoderror:
+            if fmoderror.result not in (
+                    RESULT.INVALID_HANDLE,
+                    RESULT.CHANNEL_STOLEN,
+                ):
+                    raise fmoderror
 
     def set_frequency(self, frequency: int) -> None:
-        set_frequency(self.fmod_handle, frequency)
+        try:
+            self.channel.frequency = frequency
+        except FmodError as fmoderror:
+            if fmoderror.result not in (
+                    RESULT.INVALID_HANDLE,
+                    RESULT.CHANNEL_STOLEN,
+                ):
+                    raise fmoderror
 
     def set_mute(self, state: bool) -> None:
-        set_mute(self.fmod_handle, state)
+        try:
+            self.channel.mute = state
+        except FmodError as fmoderror:
+            if fmoderror.result not in (
+                    RESULT.INVALID_HANDLE,
+                    RESULT.CHANNEL_STOLEN,
+                ):
+                    raise fmoderror
 
     # endregion
 

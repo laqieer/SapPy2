@@ -96,8 +96,6 @@ class Player(object):
             mode |= MODE.LOOP_NORMAL
         else:
             mode |= MODE.LOOP_OFF
-        if type(sample) != M4ADirectSoundSample:
-            sample.sample_data = bytes((byte + 128) % 256 for byte in sample.sample_data)
         sound = self.system.create_sound(sample.sample_data, mode=mode, 
                                          exinfo=CREATESOUNDEXINFO(length=sample.size,
                                                                   sound_type=SOUND_TYPE.RAW.value,

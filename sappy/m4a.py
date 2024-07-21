@@ -180,7 +180,7 @@ class M4ASample(object):
         self.looped = looped
         self.frequency = frequency
         self.loop_start = loop_start
-        self.sample_data = sample_data
+        self.sample_data = bytes((byte + 128) % 256 for byte in sample_data)
 
         self.sound: Sound = None
 

@@ -2,6 +2,9 @@
 """CLI runner for SapPy."""
 import argparse
 
+from sappy.fmod import set_fmod_path
+set_fmod_path()
+
 from sappy.player import Player
 
 

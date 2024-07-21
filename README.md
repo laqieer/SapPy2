@@ -9,10 +9,17 @@ possible.
 This project is still heavily in development. However, playback with a high 
 degree of accuracy can be achieved with this emulator in its current state.
 
-## How do I use this?
-To use SapPy2, install [FMOD](https://fmod.com/download#fmodengine) following [this guide](https://pyfmodex.readthedocs.io/en/latest/usage/installation.html) and call it from the command line:
+## Prerequisites
+```sh
+pip install pyfmodex
+# for Windows users:
+pip install windows-curses
 ```
-python3 .\sap.py .\fe6.gba -st 0x3994d8 97
+
+## How do I use this?
+To use SapPy2, simply call it from the command line:
+```sh
+python3 .\sap.py .\fe6.gba -st 0x3994d8 15
 ```
 
 Full command line usage is as follows:
@@ -23,8 +30,18 @@ positional arguments:
   path                  path to the ROM to play
   song_num
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   -st SONG_TABLE, --song_table SONG_TABLE
                         address of song table in rom
 ```
+
+## TSG
+
+### Issue: pyfmodex failed to find fmod
+
+Install [FMOD](https://fmod.com/download#fmodengine) and fix `fmod_path` in [sappy/fmod.py](sappy/fmod.py) following [this guide](https://pyfmodex.readthedocs.io/en/latest/usage/installation.html).
+
+### Issue: `_curses.error: curses function returned NULL`
+
+The terminal is too small, try to run it in full screen mode.

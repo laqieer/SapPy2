@@ -1,4 +1,6 @@
 # PySappy2
+<img width="1427" alt="screenshot" src="https://github.com/user-attachments/assets/faab7e5f-611f-4d09-96b9-226d410c249a">
+
 ## What is this?
 This is a cross-platform port of [Some Shrug's SapPy](https://github.com/hfmkwi/SapPy).
 

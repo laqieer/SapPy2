@@ -12,8 +12,6 @@ from .config import (BASE_FREQUENCY, PSG_SQUARE_FREQUENCY, PSG_SQUARE_VOLUME,
 from .exceptions import InvalidArgument
 from pyfmodex.channel import Channel
 from pyfmodex.sound import Sound
-from pyfmodex.enums import RESULT
-from pyfmodex.exceptions import FmodError
 from .inst_set import KeyArg, c_v, mxv
 
 NOTES = ('C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B')
@@ -445,15 +443,14 @@ class FMODNote(object):
         self.midi_note: int = midi_note
         self.velocity: int = velocity
         self.ticks: int = ticks
-        self.lfo_pos: float = 0.0
 
         self.frequency: int = 0
         self.envelope: SoundEnvelope = ...
         self.channel: Channel = None
 
     def __repr__(self):
-        return f'Note({self.midi_note}, {self.velocity}, {self.ticks}, ' \
-               f'{self.voice})'
+        return f'Note(midi_note={self.midi_note}, velocity={self.velocity}, ticks={self.ticks},' \
+               f'voice={self.voice}, frequency={self.frequency}, envelope={self.envelope})'
 
     __str__ = __repr__
 
@@ -467,16 +464,7 @@ class FMODNote(object):
     @property
     def muted(self) -> bool:
         """Return mute state in FMOD."""
-        muted=True
-        try:
-            muted=self.channel.mute
-        except FmodError as fmoderror:
-            if fmoderror.result not in (
-                    RESULT.INVALID_HANDLE,
-                    RESULT.CHANNEL_STOLEN,
-                ):
-                    raise fmoderror
-        return muted
+        return self.channel.mute
 
     # endregion
 
@@ -505,44 +493,16 @@ class FMODNote(object):
     # region FMOD FUNCTIONS
 
     def set_panning(self, panning: int) -> None:
-        try:
-            self.channel.set_pan(panning)
-        except FmodError as fmoderror:
-            if fmoderror.result not in (
-                    RESULT.INVALID_HANDLE,
-                    RESULT.CHANNEL_STOLEN,
-                ):
-                    raise fmoderror
+        self.channel.set_pan(panning)
 
     def set_volume(self, volume: int) -> None:
-        try:
-            self.channel.volume = volume
-        except FmodError as fmoderror:
-            if fmoderror.result not in (
-                    RESULT.INVALID_HANDLE,
-                    RESULT.CHANNEL_STOLEN,
-                ):
-                    raise fmoderror
+        self.channel.volume = volume
 
     def set_frequency(self, frequency: int) -> None:
-        try:
-            self.channel.frequency = frequency
-        except FmodError as fmoderror:
-            if fmoderror.result not in (
-                    RESULT.INVALID_HANDLE,
-                    RESULT.CHANNEL_STOLEN,
-                ):
-                    raise fmoderror
+        self.channel.frequency = frequency
 
     def set_mute(self, state: bool) -> None:
-        try:
-            self.channel.mute = state
-        except FmodError as fmoderror:
-            if fmoderror.result not in (
-                    RESULT.INVALID_HANDLE,
-                    RESULT.CHANNEL_STOLEN,
-                ):
-                    raise fmoderror
+        self.channel.mute = state
 
     # endregion
 
@@ -588,7 +548,6 @@ class M4ATrack(object):
 
         self.mod: int = 0
         self.lfo_speed: int = 0
-        self.lfo_pos: int = 0
 
         self.ticks: int = 0
         self.program_ctr: int = 0

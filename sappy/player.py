@@ -91,7 +91,7 @@ class Player(object):
             FMOD sample handle.
 
         """
-        mode = MODE.OPENMEMORY | MODE.OPENRAW | MODE.CREATESTREAM
+        mode = MODE.OPENMEMORY | MODE.OPENRAW
         if sample.looped:
             mode |= MODE.LOOP_NORMAL
         else:
@@ -167,8 +167,8 @@ class Player(object):
             for note in track.notes[::]:
                 if note.muted:
                     track.notes.remove(note)
-                    # note.set_mute(False)
-                    # note.channel.stop()
+                    note.set_mute(False)
+                    note.channel.stop()
 
     def execute_tracks(self, ticks):
         """Process each track under a various tick rate.
@@ -202,7 +202,6 @@ class Player(object):
                 note.set_volume(0)
                 note.channel.paused = False
 
-                track.lfo_pos = 0
                 track.notes.append(note)
             track.note_queue.clear()
 
@@ -224,11 +223,8 @@ class Player(object):
             self.execute_tracks(ticks)
             self.play_notes()
             for track in self.tracks:
-                # print(f"Track: program_ctr: {track.program_ctr}, Voice: {track.voice}, Note Queue: {track.note_queue}, Notes: {track.notes}")
-                # print(self.system.channels_playing)
                 track.update_envelope()
-            if self.frame_ctr == 0:
-                self.cull_notes()
+            self.cull_notes()
             if not any(track.enabled for track in self.tracks):
                 buffer += ticks
 
